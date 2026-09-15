@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>AR English P.5 - Active & Passive Voice</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700;800&family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    
+    <style>
+        :root {
+            --active-color: #06b6d4;
+            --passive-color: #a855f7;
+        }
+        body {
+            font-family: 'Kanit', 'Inter', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: none;
+            overflow: hidden;
+            background-color: #020617;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.82);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+        }
+        .mirror-video {
+            transform: scaleX(-1);
+            -webkit-transform: scaleX(-1);
+        }
+        ::-webkit-scrollbar { display: none; }
+        
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.8) translateY(20px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .animate-pop {
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes pulse-border {
+            0%, 100% { border-color: rgba(6, 182, 212, 0.4); box-shadow: 0 0 15px rgba(6, 182, 212, 0.2); }
+            50% { border-color: rgba(168, 85, 247, 0.8); box-shadow: 0 0 25px rgba(168, 85, 247, 0.5); }
+        }
+        .glow-card {
+            animation: pulse-border 3s infinite;
+        }
+    </style>
+</head>
+<body class="text-slate-100 h-screen w-screen overflow-hidden flex flex-col items-center justify-between relative">
+
+    <!-- Video background (AR Feed) -->
+    <video id="webcam" class="absolute inset-0 w-full h-full object-cover mirror-video pointer-events-none opacity-20 z-0 transition-opacity duration-700" autoplay playsinline muted></video>
+    
+    <!-- Main Game Canvas -->
+    <canvas id="gameCanvas" class="absolute inset-0 w-full h-full z-10 touch-none"></canvas>
+
+    <!-- UI Overlay Layer -->
+    <div id="uiLayer" class="absolute inset-0 z-20 flex flex-col justify-between pointer-events-none p-2 sm:p-4 pt-safe">
+        
+        <!-- Header: Balanced Single Row Bar -->
+        <header class="flex flex-row justify-between items-center w-full max-w-5xl mx-auto gap-1 sm:gap-2 pointer-events-auto">
+            
+            <!-- Left: Score, Difficulty & Level Badge -->
+            <div class="glass-panel px-2 py-1 sm:px-3.5 sm:py-1.5 rounded-2xl flex items-center space-x-1.5 border border-white/10 shadow-lg">
+                <div class="flex items-center space-x-1">
+                    <span class="text-xs sm:text-base">⭐</span>
+                    <span id="scoreDisplay" class="text-xs sm:text-lg font-black text-amber-400">0</span>
+                </div>
+                <div class="h-3.5 w-px bg-white/20"></div>
+                <!-- Difficulty Badge -->
+                <div id="diffBadge" class="px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wide bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                    ง่าย
+                </div>
+                <div class="h-3.5 w-px bg-white/20"></div>
+                <div class="flex items-center space-x-0.5">
+                    <span id="levelDisplay" class="text-xs sm:text-sm font-extrabold text-cyan-300">1/5</span>
+                </div>
+            </div>
+
+            <!-- Center: Voice Status Badge -->
+            <div id="voiceBadge" class="glass-panel px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl flex items-center justify-center space-x-1.5 border border-cyan-500/40 shadow-md">
+                <span id="voiceIcon" class="text-xs sm:text-base">⚡</span>
+                <span id="voiceTypeText" class="font-bold text-xs sm:text-sm tracking-wide text-cyan-300">Active Voice</span>
+            </div>
+
+            <!-- Right: Action Buttons -->
+            <div class="flex items-center space-x-1.5 sm:space-x-2">
+                <!-- AR Camera Toggle -->
+                <button id="camToggleBtn" class="glass-panel group px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl flex items-center space-x-1 hover:bg-slate-800 transition-all active:scale-95 cursor-pointer border-emerald-500/50">
+                    <span id="camIcon" class="text-xs sm:text-base">📷</span>
+                    <span id="camText" class="font-bold text-emerald-400 text-[11px] sm:text-xs hidden xs:inline">กล้อง AR</span>
+                </button>
+
+                <!-- BGM Toggle -->
+                <button id="bgmToggleBtn" class="glass-panel group px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl flex items-center space-x-1 hover:bg-slate-800 transition-all active:scale-95 cursor-pointer border-fuchsia-500/50">
+                    <span id="bgmIcon" class="text-xs sm:text-base">🎵</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Status Indicator (Bottom Center) -->
+        <div class="w-full flex justify-center mb-1 sm:mb-3 pointer-events-auto">
+            <div id="statusBadge" class="glass-panel px-3.5 py-1.5 rounded-full flex items-center space-x-2 shadow-lg border border-white/10">
+                <span id="statusDot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse shadow-[0_0_8px_rgba(251,191,36,0.8)]"></span>
+                <span id="statusText" class="font-medium text-[11px] sm:text-xs text-slate-200">แตะหน้าจอ หรือลากการ์ดเพื่อเล่น</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1. Start Menu Modal -->
+    <div id="startModal" class="absolute inset-0 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center z-50 pointer-events-auto p-4 transition-opacity duration-500">
+        <div class="glass-panel p-6 sm:p-8 rounded-[2rem] max-w-sm w-full text-center shadow-2xl glow-card animate-pop border-t border-white/20">
+            <div class="relative w-20 h-20 mx-auto mb-3">
+                <div class="absolute inset-0 bg-cyan-500 rounded-full blur-xl opacity-20 animate-pulse"></div>
+                <div class="text-5xl sm:text-6xl relative z-10 drop-shadow-2xl translate-y-1">👾</div>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-black mb-0.5 text-white tracking-tight">AR Grammar<span class="text-cyan-400">Hero</span></h1>
+            <h2 class="text-xs font-bold text-slate-400 mb-5 uppercase tracking-widest">Prathom 5 Edition</h2>
+            
+            <div class="bg-slate-900/70 p-3.5 rounded-2xl mb-5 text-left border border-slate-700/50">
+                <p class="font-bold text-emerald-400 mb-2 flex items-center gap-1.5 text-xs sm:text-sm"><span class="text-base">📱</span> วิธีเล่น (How to play):</p>
+                <ul class="text-[11px] sm:text-xs text-slate-300 space-y-1.5 pl-1">
+                    <li class="flex items-start gap-1.5"><span>1️⃣</span> ใช้นิ้ว <b>แตะค้างแล้วลาก</b> คำศัพท์ไปเรียงในช่องว่าง</li>
+                    <li class="flex items-start gap-1.5"><span>2️⃣</span> หรือกด <b>เปิดกล้อง AR</b> แล้วชูมือ จีบนิ้วเพื่อหยิบจับ</li>
+                    <li class="flex items-start gap-1.5"><span>3️⃣</span> แยกให้ออกระหว่าง Active (ทำเอง) และ Passive (ถูกทำ)</li>
+                </ul>
+            </div>
+
+            <button id="startBtn" class="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all transform active:scale-95 text-base uppercase tracking-wider">
+                Start Game 🚀
+            </button>
+        </div>
+    </div>
+
+    <!-- 2. Level Intro Modal -->
+    <div id="instructionModal" class="absolute inset-0 bg-slate-950/85 backdrop-blur-lg flex items-center justify-center z-40 hidden pointer-events-auto p-4">
+        <div class="glass-panel p-6 sm:p-8 rounded-[2rem] max-w-sm w-full text-center shadow-2xl animate-pop border border-white/10">
+            
+            <!-- Promotion Banner when advancing difficulty -->
+            <div id="diffPromotionBanner" class="hidden mb-2 py-1.5 px-3 bg-gradient-to-r from-amber-500/30 via-yellow-500/40 to-amber-500/30 border border-amber-400/50 rounded-xl text-amber-300 font-bold text-xs animate-bounce">
+                🎉 ปลดล็อกระดับความยากใหม่!
+            </div>
+
+            <div class="flex justify-center mb-2">
+                <span id="modalVoiceTag" class="px-3.5 py-1 rounded-full text-xs font-black tracking-wider uppercase border border-current shadow-lg">
+                    Active Voice
+                </span>
+            </div>
+            
+            <h2 id="modalLevelTitle" class="text-slate-400 font-bold text-xs mb-1 uppercase tracking-widest">ง่าย - Level 1/5</h2>
+            
+            <div class="my-3 py-4 px-3 bg-slate-900/80 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-current to-transparent opacity-50" id="modalLineDeco"></div>
+                <p class="text-[11px] text-slate-400 mb-1 font-medium">แปลว่า (Meaning):</p>
+                <p id="modalThaiPrompt" class="text-lg sm:text-xl font-black text-amber-300 drop-shadow-md">หมา ไล่กวด แมว</p>
+                
+                <div class="mt-3 pt-2.5 border-t border-slate-700/50">
+                    <p id="modalGrammarTip" class="text-[11px] text-slate-300 leading-relaxed font-medium">
+                        ประธาน (หมา) กร
